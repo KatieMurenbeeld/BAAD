@@ -1,0 +1,187 @@
+---
+title: "Pondo_Allom_Params"
+author: "Katie Murenbeeld"
+date: "3/26/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction:
+
+Information about allometric curves and functions used in FATES.
+https://fates-docs.readthedocs.io/en/latest/fates_tech_note.html#allometry-and-growth-along-allometric-curves
+
+## Install the BAAD Package:
+
+Install the package from github:
+
+```{r install, echo=TRUE, eval=TRUE}
+#install.packages("devtools")
+#devtools::install_github("richfitz/datastorr")
+#devtools::install_github("traitecoevo/baad.data")
+```
+
+## Review the data:
+
+```{r data, echo=TRUE, eval=TRUE}
+baad <- baad.data::baad_data()
+d_baad <- baad$data
+head(d_baad)
+```
+
+Refine (subset) the data for Pinus Ponderosa:
+
+```{r subset_pipo, echo=TRUE, eval=TRUE}
+pipo <- d_baad[ which(d_baad$species == 'Pinus ponderosa'), ]
+#head(pipo)
+
+```
+
+Plot raw data, dbh to height.
+
+```{r d2h_raw, echo=TRUE, eval=TRUE}
+# Set variables from the data. 
+
+# Diameter at breat height (dbh) will be used for most allometric calculations
+dbh <- (pipo$d.bh)*1000
+# Height
+h <- (pipo$h.t)
+
+plot(h~dbh,
+     main="Diameter at breast height (dbh) to Height",
+     xlab = "dbh (mm)",
+     ylab = "Height (m)")
+
+hist(dbh)
+hist(log10(dbh))
+```
+\newpage
+
+## Diameter at breast height (dbh) to height - d2h
+
+FATES allows for four different approaches to predicting height from dbh:
+
+* A power function $$ h = p_{1} * d^(p_{2}) $$
+* O'Brien et al. (1995) $$ log_{10}Height = log_{10}DBH*slope + intercept $$
+* Poorter et al. (2006) $$ h = p_{1} * (1-exp(p_{2}*d^(p_{3}))) $$
+* Martinex Cano et al. (2019) $$ h = (p_{1}*d^(p_{2})/(p_{3} + d^(p_{2}))) $$
+
+
+For my research I use the dbh to height relationship from O'Brien et al., 1995. The log10Height (*m*) is regressed on log10DBH (*mm*). 
+Where slope is p1 or fates_allom_d2h1 and intercept is p2  or fates_allom_d2h2 in the parameter file.
+
+$$ log_{10}Height = log_{10}DBH*slope + intercept $$
+So modeled height would be. I want to solve for the best fit p1 and p2 given height and dbh data from BAAD.
+
+$$ Height = 10^{(log10(min(d,dbhmax))*p1 + p2)} $$
+
+```{r simplemod_d2h, echo=TRUE, eval=TRUE}
+# But first I will test out just a linear model
+d2hmod <- lm(h~dbh)
+coef(d2hmod)
+
+# Then a linear model with log10(h) regressed on log10(dbh)
+d2hmodlog <- lm(log10(h)~log10(dbh))
+coef(d2hmodlog)
+```
+
+Next, I will create a function to represent the O'Brien calculation used for dbh to height relationships.
+
+```{r obrien, echo=TRUE, eval=TRUE}
+obrien <- function(dbh, p1, p2){
+  height <- 10^((log10(dbh))* p1 + p2)
+  return(height)
+}
+
+dbins <- c(100,200,300,400,500,600,700,800,900) # Remember in O'Brien dbh is in mm. 
+
+# Use default parameters from O'Brien et al 1995
+default <- obrien(dbins, 0.7, -0.2)
+# Use the parameters from the log10 linear model d2hmodlog
+lmfit <- obrien(dbins, 0.82, -0.82)
+
+coef(lm(default~dbins))
+coef(lm(lmfit~dbins))
+
+plot(h~dbh,
+     main="Diameter at breast height (dbh) to Height",
+     xlab = "dbh (mm)",
+     ylab = "Height (m)")
+
+points(default~dbins, col="red", pch=16) # default O'Brien slope (0.7) and intercept (-0.2)
+points(lmfit~dbins, col="blue", pch=16) # BAAD data slope (0.82) and intercept (-0.82)
+#curve(1.89+0.05*x, add=T, col="blue",  lwd=1) # linear model coefficients 
+#curve(-0.82 + (0.82*x), add=T, col="green", lwd=2) # log regression coefficients from d2hmodlog
+#curve(10^(-0.2)+(10^0.7*x), add=T, col="red", lwd=4) # linear model using default coefficients from O'Brien et al 1995
+#curve(11.7 + 0.07*x, add=T, col="red", lty=2, lwd=2) # linear model using default coefficients from O'Brien et al 1995
+#curve(3.46 + 0.04*x, add=T, col="blue", lty=2, lwd=2) # linear fit of slope and intercept to points modeled from (d2hmodlog)
+
+```
+
+```{r log10plot, echo=TRUE, eval=TRUE}
+
+plot(log10(h)~log10(dbh),
+     main="Diameter at breast height (dbh) to Height",
+     xlab = "log10 dbh (mm)",
+     ylab = "log10 Height (m)")
+curve(-0.82 + (0.82*x), add=T, col="blue", lwd=2) # log regression coefficients from d2hmodlog
+```
+
+\newpage
+
+## Diameter at breast height (dbh) to above ground biomass (AGB) - d2bagw
+
+FATES provides three different options for calculating AGB from dbh:
+
+* Saldarriaga et al. (1998) $$ (C_{agb} = f_{agb} * p_{1} * h^{p_{2}} * d^{p_{3}} * rho^{p_{4}}) $$
+* 2 parameter power function $$ (C_{agb} = p_{1}/c2b * d^{p_{2}} )$$
+* Chave et al. (2014) $$ (C_{agb} = p_{1}/c2b * (rho * d^2 * h)^{p_{2}})$$
+
+
+For this project I will use Saldarriaga et al. (1998) 
+$$ C_{agb} = f_{agb} * p_{1} * h^{p_{2}} * d^{p_{3}} * rho^{p_{4}}$$
+
+```{r d2bagw, echo=TRUE, eval=TRUE}
+
+# Define the variables needed for the Saldarriaga function
+rho = 0.367
+f_agb = 0.6
+d.agb <- c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+h.agb <- c(2.82, 7.7, 13.9, 21.0, 29.1, 37.9, 37.9, 37.9, 37.9, 57.5)
+#use heights from d2h
+lmfit.h <- obrien(d.agb, 0.82, -0.82)
+choj <- c(21.2, 117.1, 318, 646.1, 1119.6, 1754.5, 2565.1, 3564.4, 4764.4, 6176.6)
+
+# Define the Saldarriaga function 
+sal <- function(f_agb, p1, h, p2, d, p3, rho, p4){
+  agb <- f_agb * p1 * h^p2 * d^p3 * rho^p4
+  return(agb)
+}
+
+# Parameters from earlier Jupyter Notebook. Not sure how to determine the best fit for the Sal function in r.
+p1 = 0.131
+p2 = 0.626
+p3 = 2.46
+p4 = 2.18
+
+test <- sal(f_agb, p1, h.agb, p2, d.agb, p3, rho, p4)
+test2 <- sal(f_agb, p1, lmfit.h, p2, d.agb, p3, rho, p4)
+plot(choj~d.agb, col="blue")
+points(test~d.agb, col="red")
+points(test2~d.agb, col="yellow")
+
+
+```
+
+
+
+
+
+
+
+
+
+
