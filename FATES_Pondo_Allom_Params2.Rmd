@@ -46,17 +46,18 @@ Plot raw data, dbh to height.
 # Set variables from the data. 
 
 # Diameter at breat height (dbh) will be used for most allometric calculations
-dbh <- (pipo$d.bh)*1000
+dbh_mm <- (pipo$d.bh)*1000
+dbh_cm <- (pipo$d.bh)*100
 # Height
 h <- (pipo$h.t)
 
-plot(h~dbh,
+plot(h~dbh_mm,
      main="Diameter at breast height (dbh) to Height",
      xlab = "dbh (mm)",
      ylab = "Height (m)")
 
-hist(dbh)
-hist(log10(dbh))
+hist(dbh_mm)
+hist(log10(dbh_mm))
 ```
 \newpage
 
@@ -80,12 +81,15 @@ $$ Height = 10^{(log10(min(d,dbhmax))*p1 + p2)} $$
 
 ```{r simplemod_d2h, echo=TRUE, eval=TRUE}
 # But first I will test out just a linear model
-d2hmod <- lm(h~dbh)
-coef(d2hmod)
+d2hmod_mm <- lm(h~dbh_mm)
+coef(d2hmod_mm)
 
 # Then a linear model with log10(h) regressed on log10(dbh)
-d2hmodlog <- lm(log10(h)~log10(dbh))
-coef(d2hmodlog)
+d2hmodlog_mm <- lm(log10(h)~log10(dbh_mm))
+coef(d2hmodlog_mm)
+
+d2hmodlog_cm <- lm(log10(h)~log10(dbh_cm))
+coef(d2hmodlog_cm)
 ```
 
 Next, I will create a function to represent the O'Brien calculation used for dbh to height relationships.
@@ -96,39 +100,56 @@ obrien <- function(dbh, p1, p2){
   return(height)
 }
 
-dbins <- c(100,200,300,400,500,600,700,800,900) # Remember in O'Brien dbh is in mm. 
+dbins_mm <- c(100,200,300,400,500,600,700,800,900) # Remember in O'Brien dbh is in mm. 
+dbins_cm <- c(10,20,30,40,50,60,70,80,90) # But does FATES do that conversion or use cm?
 
 # Use default parameters from O'Brien et al 1995
-default <- obrien(dbins, 0.7, -0.2)
+default_mm <- obrien(dbins_mm, 0.7, -0.2)
 # Use the parameters from the log10 linear model d2hmodlog
-lmfit <- obrien(dbins, 0.82, -0.82)
+lmfit_mm <- obrien(dbins_mm, 0.82, -0.82) # dbh in mm
+lmfit_cm <- obrien(dbins_cm, 0.82, 0.003) # dbh in cm
 
-coef(lm(default~dbins))
-coef(lm(lmfit~dbins))
+coef(lm(default_mm~dbins_mm))
+coef(lm(lmfit_mm~dbins_mm))
+coef(lm(lmfit_cm~dbins_cm))
 
-plot(h~dbh,
+plot(h~dbh_mm,
      main="Diameter at breast height (dbh) to Height",
      xlab = "dbh (mm)",
      ylab = "Height (m)")
 
-points(default~dbins, col="red", pch=16) # default O'Brien slope (0.7) and intercept (-0.2)
-points(lmfit~dbins, col="blue", pch=16) # BAAD data slope (0.82) and intercept (-0.82)
-#curve(1.89+0.05*x, add=T, col="blue",  lwd=1) # linear model coefficients 
-#curve(-0.82 + (0.82*x), add=T, col="green", lwd=2) # log regression coefficients from d2hmodlog
-#curve(10^(-0.2)+(10^0.7*x), add=T, col="red", lwd=4) # linear model using default coefficients from O'Brien et al 1995
-#curve(11.7 + 0.07*x, add=T, col="red", lty=2, lwd=2) # linear model using default coefficients from O'Brien et al 1995
-#curve(3.46 + 0.04*x, add=T, col="blue", lty=2, lwd=2) # linear fit of slope and intercept to points modeled from (d2hmodlog)
+points(default_mm~dbins_mm, col="red", pch=16) # default O'Brien slope (0.7) and intercept (-0.2)
+points(lmfit_mm~dbins_mm, col="blue", pch=16) # BAAD data slope (0.82) and intercept (-0.82)
 
 ```
 
 ```{r log10plot, echo=TRUE, eval=TRUE}
 
-plot(log10(h)~log10(dbh),
+plot(log10(h)~log10(dbh_mm),
      main="Diameter at breast height (dbh) to Height",
      xlab = "log10 dbh (mm)",
      ylab = "log10 Height (m)")
 curve(-0.82 + (0.82*x), add=T, col="blue", lwd=2) # log regression coefficients from d2hmodlog
 ```
+```{r plots_d2h_cm, echo=TRUE, eval=TRUE}
+
+plot(h~dbh_cm,
+     main="Diameter at breast height (dbh) to Height",
+     xlab = "dbh (cm)",
+     ylab = "Height (m)")
+
+points(default_mm~dbins_mm, col="red", pch=16) # default O'Brien slope (0.7) and intercept (-0.2)
+points(lmfit_cm~dbins_cm, col="blue", pch=16) # BAAD data slope (0.82) and intercept (-0.82)
+
+plot(log10(h)~log10(dbh_cm),
+     main="Diameter at breast height (dbh) to Height",
+     xlab = "log10 dbh (cm)",
+     ylab = "log10 Height (m)")
+curve(0.003 + (0.82*x), add=T, col="blue", lwd=2) # log regression coefficients from d2hmodlog
+
+```
+
+
 
 \newpage
 
