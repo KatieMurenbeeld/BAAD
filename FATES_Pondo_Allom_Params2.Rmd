@@ -167,14 +167,15 @@ $$ C_{agb} = f_{agb} * p_{1} * h^{p_{2}} * d^{p_{3}} * rho^{p_{4}}$$
 
 ```{r d2bagw, echo=TRUE, eval=TRUE}
 
+# In this case dbh and agb calculated from Chojnacky serves as the "observed data" to fit the other parameters against. 
+
 # Define the variables needed for the Saldarriaga function
 rho = 0.367
 f_agb = 0.6
 d.agb <- c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
 h.agb <- c(2.82, 7.7, 13.9, 21.0, 29.1, 37.9, 37.9, 37.9, 37.9, 57.5)
 #use heights from d2h
-lmfit.h <- obrien(d.agb, 0.82, -0.82)
-choj.h <- c(21.2, 117.1, 318, 646.1, 1119.6, 1754.5, 2565.1, 3564.4, 4764.4, 6176.6)
+lmfit.h <- obrien(d.agb, 0.82, 0.003)
 
 # Define the Saldarriaga function 
 sal <- function(f_agb, p1, h, p2, d, p3, rho, p4){
@@ -189,34 +190,77 @@ par2_pwr <- function(p1,d,p2,c2b){
 }
 
 choj_eq <- function(b0,b1,d){
-  biom <- b0  + b1*log(d)
+  biom <- b0  + (b1*log(d))
   return(biom)
 }
-choj_p1 = 2.6177
+choj_p1 = -2.6177
 choj_p2 = 2.4638
 c2b = 2
 
-test_2par <- par2_pwr(choj_p1, d.agb, choj_p2, c2b)
-test_choj <- choj_eq(choj_p1, choj_p2, d.agb)
+test_2par <- par2_pwr(0.146, d.agb, 2.464, c2b)
+choj <- choj_eq(choj_p1, choj_p2, d.agb)
 
 # Parameters from earlier Jupyter Notebook. Not sure how to determine the best fit for the Sal function in r.
-p1 = 0.131
-p2 = 0.626
-p3 = 2.46
-p4 = 2.18
+#p1 = 0.131
+#p2 = 0.626
+#p3 = 2.46
+#p4 = 2.18
 
-test <- sal(f_agb, p1, h.agb, p2, d.agb, p3, rho, p4)
-test2 <- sal(f_agb, p1, lmfit.h, p2, d.agb, p3, rho, p4)
+p1 = 0.11
+p2 = 0.65
+p3 = 2.45
+p4 = 2.15
+
+sal1 <- sal(f_agb, p1, h.agb, p2, d.agb, p3, rho, p4)
+sal2 <- sal(f_agb, p1, lmfit.h, p2, d.agb, p3, rho, p4)
+sal3 <- sal(f_agb, 0.131, lmfit.h, 0.626, d.agb, 2.46, rho, 2.18)
 #plot(choj.h~d.agb, type="l", col="blue")
-plot(test~d.agb, col="red", type="l", ylab="agb", xlab="dbh (cm)")
-points(test2~d.agb, col="yellow", pch=16)
-points(test_2par~d.agb, col="pink", pch=16)
-points(test_choj~d.agb, col="green", pch=16)
-
+plot(sal1~d.agb, col="red", type="l", ylab="agb", xlab="dbh (cm)")
+points(sal2~d.agb, col="blue", type="l")
+points(sal3~d.agb, col="black", lty=2, type="l")
+points(test_2par~d.agb, col="orange", type="l")
+points(exp(choj)~d.agb, col="darkgreen", pch=16)
 
 ```
 
 
+```{r bagw_rmse, echo=TRUE, eval=TRUE}
+# Here I want to get the r2 or rmse to compare the different allom functions and params to the "observed" chojnacky calculation
+
+rmse <- function(y_hat,y){ 
+  return(sqrt(mean((y-y_hat)^2))) 
+}
+
+r2 <- function(y_hat,y){ 
+  RSS<-sum((((y_hat))-(y))^2) 
+  TSS<-sum(((y)-(mean(y)))^2) 
+  return(1-RSS/TSS)} 
+
+
+# remember y_hat is the model predicted agb
+# y observed = test_choj
+# y_hat(s) = test (sal), test2 (sal), test_2par, py_test (sal)
+
+sal1_rmse <- rmse(sal1,choj)
+sal1_R2 <- r2(sal1, exp(choj))
+
+sal2_rmse <- rmse(sal2,choj)
+sal2_R2 <- r2(sal2,exp(choj))
+
+sal3_rmse <- rmse(sal3, choj)
+sal3_R2 <- r2(sal3, exp(choj))
+
+test_2par_rmse <- rmse(test_2par, choj)
+test_2par_R2 <- r2(test_2par, exp(choj))
+
+agb_rmse <- c(sal1_rmse, sal2_rmse, sal3_rmse, test_2par_rmse)
+agb_r2 <- c(sal1_R2, sal2_R2, sal3_R2, test_2par_R2)
+agb_names <- c("Sal test 1", "Sal test 2", "Sal test 3", "Two Param Power")
+
+agb_mod_fits <- data.frame(agb_rmse, agb_r2, row.names = agb_names)
+
+agb_mod_fits
+```
 
 
 
