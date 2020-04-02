@@ -162,7 +162,7 @@ FATES provides three different options for calculating AGB from dbh:
 * Chave et al. (2014) $$ (C_{agb} = p_{1}/c2b * (rho * d^2 * h)^{p_{2}})$$
 
 
-For this project I will use Saldarriaga et al. (1998) 
+For this project I will test Saldarriaga et al. (1998) as well as the 2 parameter power function.
 $$ C_{agb} = f_{agb} * p_{1} * h^{p_{2}} * d^{p_{3}} * rho^{p_{4}}$$
 
 ```{r d2bagw, echo=TRUE, eval=TRUE}
@@ -241,16 +241,16 @@ r2 <- function(y_hat,y){
 # y observed = test_choj
 # y_hat(s) = test (sal), test2 (sal), test_2par, py_test (sal)
 
-sal1_rmse <- rmse(sal1,choj)
+sal1_rmse <- rmse(sal1,exp(choj))
 sal1_R2 <- r2(sal1, exp(choj))
 
-sal2_rmse <- rmse(sal2,choj)
+sal2_rmse <- rmse(sal2,exp(choj))
 sal2_R2 <- r2(sal2,exp(choj))
 
-sal3_rmse <- rmse(sal3, choj)
+sal3_rmse <- rmse(sal3, exp(choj))
 sal3_R2 <- r2(sal3, exp(choj))
 
-test_2par_rmse <- rmse(test_2par, choj)
+test_2par_rmse <- rmse(test_2par, exp(choj))
 test_2par_R2 <- r2(test_2par, exp(choj))
 
 agb_rmse <- c(sal1_rmse, sal2_rmse, sal3_rmse, test_2par_rmse)
@@ -263,9 +263,232 @@ agb_mod_fits
 ```
 
 
+## Diamter to Leaf Biomass (d2blmax)
+
+FATES provides three different options for calculating leaf biomass from dbh:
+
+* Saldarriaga et al. (1998) $$ (blmax = p_{1} * d^{p_{2}} * rho^{p_{3}}) $$
+* 2 parameter power function $$ (blmax = p_{1}/c2b * d^{p_{2}} )$$
+* 2 parameter power function for large trees $$ (blmax = p_{1}/c2b * min(d,dbhmax)^{p_{2}} )$$
+
+Here I will test the Saldarriaga and 2 parameter power functions.
+
+```{r blmax_data, echo=TRUE, eval=TRUE}
+
+bl <- pipo$m.lf
+
+bl_test <-c(0.8, 4.6, 13.2, 30, 36.2, 60, 70.5, 93) # From Polly's sheets
+bl_dbh <- c(10, 20, 30, 40, 50, 60, 70, 80) #cm
+
+plot(bl~dbh_cm)
+hist(bl)
+plot(log10(bl)~log10(dbh_cm))
+hist(log10(bl))
+
+d2blmod <- lm(log10(bl)~log10(dbh_cm))
+coef(d2blmod)
+```
+
+```{r blmax_modfit1, echo=TRUE, eval=TRUE}
+
+plot(log10(bl)~log10(dbh_cm))
+curve((-1.36 + 1.76*x),add=T, col="blue", lwd=2)
 
 
+bl_lm <- function(dbh, p1, p2){
+  blmax <- 10^((log10(dbh))* p1 + p2)
+  return(blmax)
+}
+
+bl_lm_mod <- bl_lm(sort(dbh_cm), 1.76, -1.36)
+
+plot(bl~dbh_cm)
+points(bl_lm_mod~sort(dbh_cm), col="red", pch=16)
+
+```
 
 
+```{r d2blmax_func, echo=TRUE, eval=TRUE}
+bl_sal <- function(p1,d,p2,rho,p3){
+  blmax <- (p1 * (d^p2) * (rho^p3))
+  return(blmax)
+}
+
+bl_2par <- function(p1,d,p2,c2b){
+  blmax <- (p1 * (d^p2))/c2b
+  return(blmax)
+}
+
+# Test difference params
+
+# Sal1: p1= 0.0169, p2= 2.592, p3= 2.251 (from Jupyter notebook curve_fit)
+# Sal2: p1= 0.2, p2=1.55, p3=0.75 (from Polly)
+# Sal3: p1= 0.02, p2= 2.011, p3= -0.01665 (from nls but setting p1=0.2)
+# Sal4: p1= 0.115, p2= 1.834, p3= 1.33 (from nls below, p1=0.115, and using only mean bl for binned dbh (bl_test, bl_dbh))
+
+bl_sal1_mod <- bl_sal(0.0169, sort(dbh_cm), 2.592, rho, 2.251) 
+#bl_sal_mod
+bl_sal2_mod <- bl_sal(0.2, sort(dbh_cm), 1.55, rho, 0.75) 
+#bl_sal2_mod
+bl_sal3_mod <- bl_sal(0.2, sort(dbh_cm), 2.011, rho, 2.28)
+#bl_sal3_mod
+bl_sal4_mod <- bl_sal(0.115, bl_dbh, 1.834, rho, 1.33)
+
+# 2 pwr1: p1= 0.0035 , p2= 2.592 (from jupyter notebook curve_fit)
+# 2 pwr2: p1= 0.005, p2= 2
+# 2 pwr3: p1= 0.04, p2= 2.01 (from r nls below using full bl and dbh data from BAAD)
+# 2 pwr4: p1= 0.06, p2= 1.834 (from nls below using mean BL for binned dbh)
+
+bl_2par_mod <- bl_2par(0.0035, sort(dbh_cm), 2.592, 2) 
+#bl_2par_mod=
+bl_2par2_mod <- bl_2par(0.001, sort(dbh_cm), 2.85, 2) # Brute force
+#bl_2par2_mod
+bl_2par3_mod <- bl_2par(0.041, sort(dbh_cm), 2.011, 2) 
+#bl_2par3_mod
+bl_2par4_mod <- bl_2par(0.06, bl_dbh, 1.834, 2) 
+
+bl_2par5_mod <- bl_2par(0.06, sort(dbh_cm), 1.834, 2)
+```
+
+```{r bl_plots, echo=TRUE, eval=TRUE}
+
+plot(bl~dbh_cm)
+points(bl_sal1_mod~sort(dbh_cm), type="l", col="blue", lwd=2, lty=3)
+points(bl_sal2_mod~sort(dbh_cm), type="l", col="darkgreen", lwd=2, lty=3)
+points(bl_sal3_mod~sort(dbh_cm), type="l", col="green", lwd=2, lty=3)
+points(bl_2par_mod~sort(dbh_cm), type="l", col="red", lwd=2, lty=3)
+points(bl_2par2_mod~sort(dbh_cm), type="l", col="pink", lwd=2, lty=3)
+points(bl_2par3_mod~sort(dbh_cm), type="l", col="orange", lwd=2, lty=3)
+points(bl_2par5_mod~sort(dbh_cm), type="l", col="black", lwd=3)
+
+plot(bl_test~bl_dbh)
+points(bl_sal4_mod~bl_dbh, type="l", col="blue", lwd=2, lty=3)
+points(bl_2par4_mod~bl_dbh, type="l", col="orange", lwd=2, lty=3)
+
+```
+
+```{r bl_rmse, echo=TRUE, eval=TRUE}
+bl_sal1_rmse <- rmse(bl_sal1_mod, na.omit(bl))
+bl_sal1_R2 <- r2(bl_sal1_mod, na.omit(bl))
+
+bl_2par_rmse <- rmse(bl_2par_mod, na.omit(bl))
+bl_2par_R2 <- r2(bl_2par_mod, na.omit(bl))
+
+bl_sal2_rmse <- rmse(bl_sal2_mod, na.omit(bl))
+bl_sal2_R2 <- r2(bl_sal2_mod, na.omit(bl))
+
+bl_sal3_rmse <- rmse(bl_sal3_mod, na.omit(bl))
+bl_sal3_R2 <- r2(bl_sal3_mod, na.omit(bl))
+
+bl_sal4_rmse <- rmse(bl_sal4_mod, bl_dbh)
+bl_sal4_R2 <- r2(bl_sal4_mod, bl_dbh)
+
+bl_2par2_rmse <- rmse(bl_2par2_mod, na.omit(bl))
+bl_2par2_R2 <- r2(bl_2par2_mod, na.omit(bl))
+
+bl_2par3_rmse <- rmse(bl_2par3_mod, na.omit(bl))
+bl_2par3_R2 <- r2(bl_2par3_mod, na.omit(bl))
+
+bl_2par4_rmse <- rmse(bl_2par4_mod, bl_test)
+bl_2par4_R2 <- r2(bl_2par4_mod, bl_test)
+
+bl_2par5_rmse <- rmse(bl_2par5_mod, na.omit(bl))
+bl_2par5_R2 <- r2(bl_2par5_mod, na.omit(bl))
+
+bl_rmse <- c(bl_sal1_rmse, bl_sal2_rmse, bl_sal3_rmse, bl_2par_rmse, bl_2par2_rmse, bl_2par3_rmse, bl_2par5_rmse)
+bl_r2 <- c(bl_sal1_R2, bl_sal2_R2, bl_sal3_R2, bl_2par_R2, bl_2par2_R2, bl_2par3_R2, bl_2par5_R2)
+bl_names <- c("Sal test 1: BL", "Sal test 2: BL", "Sal test 3:BL","Two Param Power: BL", "Two Param Power 2: BL", "Two Param Power 3:BL","Two Param Power 5: BL")
+
+bl_mod_fits <- data.frame(bl_rmse, bl_r2, row.names = bl_names)
+
+bl_mod_fits
+```
+```{r test_nls, echo=TRUE, eval=TRUE}
+
+bl2par.fit <- nls(bl_test ~ bl_2par(p1,bl_dbh, p2, 2), start=list(p1=0.0035, p2=2.5))
+bl2par.fit
+
+blsalda.fit <- nls(bl_test ~ bl_sal(0.12, bl_dbh, p2, 0.367, p3), start=list(p2=1,p3=0.5))
+blsalda.fit
+```
+## Diamter to Crown Area
+
+FATES provides one option for calculating crown area from dbh. There are actually 3 modes to choose from, but they all reference the same equation.
+
+* A 2 power crown area function
+
+$$ carea = spreadterm * dbh^{crown area to dbh exponent} $$
+
+where 
+
+$$ spreadterm = (spread * d2ca_{max}) + ((1-spread) * d2ca_{min}) $$
+and 
+
+$$ crown area to dbh exponent = d2blp2 + d2blediff $$
+
+Combined all together:
+
+$$ carea = (spread * d2ca_{max}) + ((1-spread) * d2ca_{min}) * dbh^{(d2blp2 + d2blediff)} $$
+We are given dbh, d2bl p2, d2bl ediff (0),  and spread? We need to fit d2camax and min? Or we should know d2ca max and min and only need to fit for spread?
+
+```{r d2ca_data, echo=TRUE, eval=TRUE}
+
+ca <- pipo$a.cp[which(pipo$a.cp>0, pipo$dbh>0)]
+ca_dbh <- pipo$d.bh[which(pipo$a.cp > 0, pipo$d.bh>0)]*100
+
+plot(ca~ca_dbh)
+
+ca_test <- pipo$a.cp
+
+plot(ca_test~dbh_cm)
+
+plot(pipo$a.cp ~ pipo$d.bh)
+
+```
 
 
+```{r d2ca_eq, echo=TRUE, eval=TRUE}
+
+d2carea <- function(sprd, d2camax, d2camin, dbh, d2blp2){
+  c.area <- ((sprd * d2camax) + ((1-sprd)*d2camin) * dbh^d2blp2)
+  return(c.area)
+}
+
+ca_mod1 <- d2carea(0.5, 0.7, 0.1, ca_dbh, 1.834)
+ca_mod2 <- d2carea(0.85, 0.7, 0.1, ca_dbh, 1.834)
+ca_mod3 <- d2carea(0.85, 0.65, 0.15, ca_dbh, 1.834)
+ca_mod4 <- d2carea(0.85, 0.65, 0.1, ca_dbh, 1.834)
+
+plot(ca~ca_dbh)
+points(ca_mod1 ~ ca_dbh, pch=16, col="black")
+points(ca_mod2 ~ ca_dbh, pch=16, col="red")
+points(ca_mod3 ~ ca_dbh, pch=16, col="darkgreen")
+points(ca_mod4 ~ ca_dbh, pch=16, col="orange")
+
+# try to fit parameters
+
+#d2ca.fit <- nls(ca ~ d2carea(sprd, d2camax, 0.1, sort(dbh_cm), 0.1834), start=list(sprd=0.4, d2camax=0.5), trace=TRUE)
+#d2ca.fit
+```
+
+I want to try something where I step through spread values from 0.1 to 0.9 at intervals of 0.1 and calculate the d2camax.
+
+In the mean time I need to figure out the issue with NAs so that I can calculate some $ r^2 $ values. 
+
+```{r d2ca_mod_fit, echo=TRUE, eval=TRUE}
+
+#ca_mod1[is.na(ca_mod1)] <- min(ca)
+#ca_mod2[is.na(ca_mod2)] <- min(ca)
+#ca_mod3[is.na(ca_mod3)] <- min(ca)
+#ca_mod4[is.na(ca_mod4)] <- min(ca)
+
+ca_mod1_R2 <- r2(ca_mod1[7:125], ca[7:125])
+ca_mod2_R2 <- r2(ca_mod2[7:125], ca[7:125])
+ca_mod3_R2 <- r2(ca_mod3[7:125], ca[7:125])
+ca_mod4_R2 <- r2(ca_mod4[7:125], ca[7:125])
+
+ca_mod1_R2
+ca_mod2_R2
+ca_mod3_R2
+ca_mod4_R2
+```
