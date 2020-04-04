@@ -29,36 +29,20 @@ Install the package from github:
 ```{r data, echo=TRUE, eval=TRUE}
 baad <- baad.data::baad_data()
 d_baad <- baad$data
-head(d_baad)
+
+# Check the data
+#head(d_baad)
 ```
 
 Refine (subset) the data for Pinus Ponderosa:
 
 ```{r subset_pipo, echo=TRUE, eval=TRUE}
 pipo <- d_baad[ which(d_baad$species == 'Pinus ponderosa'), ]
+
+# Check the data
 #head(pipo)
-
 ```
 
-Plot raw data, dbh to height.
-
-```{r d2h_raw, echo=TRUE, eval=TRUE}
-# Set variables from the data. 
-
-# Diameter at breat height (dbh) will be used for most allometric calculations
-dbh_mm <- (pipo$d.bh)*1000
-dbh_cm <- (pipo$d.bh)*100
-# Height
-h <- (pipo$h.t)
-
-plot(h~dbh_mm,
-     main="Diameter at breast height (dbh) to Height",
-     xlab = "dbh (mm)",
-     ylab = "Height (m)")
-
-hist(dbh_mm)
-hist(log10(dbh_mm))
-```
 \newpage
 
 ## Diameter at breast height (dbh) to height - d2h
@@ -78,6 +62,26 @@ $$ log_{10}Height = log_{10}DBH*slope + intercept $$
 So modeled height would be. I want to solve for the best fit p1 and p2 given height and dbh data from BAAD.
 
 $$ Height = 10^{(log10(min(d,dbhmax))*p1 + p2)} $$
+
+```{r d2h_raw, echo=TRUE, eval=TRUE}
+# Set variables from the data. 
+
+# Diameter at breat height (dbh) will be used for most allometric calculations
+dbh_mm <- (pipo$d.bh)*1000 # O'Brien uses dbh in mm
+dbh_cm <- (pipo$d.bh)*100 # FATES needs dbh in cm
+# Height
+h <- (pipo$h.t)
+
+plot(h~dbh_mm,
+     main="Diameter at breast height (dbh) to Height",
+     xlab = "dbh (mm)",
+     ylab = "Height (m)")
+
+hist(dbh_mm)
+hist(log10(dbh_mm))
+```
+
+Initially I wanted to test out a simple linear function and then a log-log regression (basically O'Brien). 
 
 ```{r simplemod_d2h, echo=TRUE, eval=TRUE}
 # But first I will test out just a linear model
@@ -100,14 +104,18 @@ obrien <- function(dbh, p1, p2){
   return(height)
 }
 
-dbins_mm <- c(100,200,300,400,500,600,700,800,900) # Remember in O'Brien dbh is in mm. 
-dbins_cm <- c(10,20,30,40,50,60,70,80,90) # But does FATES do that conversion or use cm?
+# Remember in O'Brien dbh is in mm. 
+dbins_mm <- c(100,200,300,400,500,600,700,800,900) 
+# But FATES uses cm.
+dbins_cm <- c(10,20,30,40,50,60,70,80,90)  
 
 # Use default parameters from O'Brien et al 1995
 default_mm <- obrien(dbins_mm, 0.7, -0.2)
+
 # Use the parameters from the log10 linear model d2hmodlog
 lmfit_mm <- obrien(dbins_mm, 0.82, -0.82) # dbh in mm
 lmfit_cm <- obrien(dbins_cm, 0.82, 0.003) # dbh in cm
+lmfit_cm2 <- obrien(dbh_cm, 0.82, 0.003)
 
 coef(lm(default_mm~dbins_mm))
 coef(lm(lmfit_mm~dbins_mm))
@@ -117,9 +125,11 @@ plot(h~dbh_mm,
      main="Diameter at breast height (dbh) to Height",
      xlab = "dbh (mm)",
      ylab = "Height (m)")
+# default O'Brien slope (0.7) and intercept (-0.2)
+points(default_mm~dbins_mm, col="red", pch=16) 
+# BAAD data slope (0.82) and intercept (-0.82) dbh in mm
+points(lmfit_mm~dbins_mm, col="blue", pch=16) 
 
-points(default_mm~dbins_mm, col="red", pch=16) # default O'Brien slope (0.7) and intercept (-0.2)
-points(lmfit_mm~dbins_mm, col="blue", pch=16) # BAAD data slope (0.82) and intercept (-0.82)
 
 ```
 
@@ -148,6 +158,23 @@ plot(log10(h)~log10(dbh_cm),
 curve(0.003 + (0.82*x), add=T, col="blue", lwd=2) # log regression coefficients from d2hmodlog
 
 ```
+One can also test the model fit using the xxx() function in R. Additionally, I want to calculate an r2 to help determine the best fit parameters.
+
+
+```{r d2b_model_fit, echo=TRUE, eval=TRUE}
+
+# Predict the fit...these stupid logs get me all turned around
+
+
+
+# Set up a function to calculate r^2
+r2 <- function(y_hat,y){ 
+  RSS<-sum((((y_hat))-(y))^2) 
+  TSS<-sum(((y)-(mean(y)))^2) 
+  return(1-RSS/TSS)} 
+
+d2bh_defaultR2 <- r2(default_mm, h)
+```
 
 
 
@@ -167,7 +194,8 @@ $$ C_{agb} = f_{agb} * p_{1} * h^{p_{2}} * d^{p_{3}} * rho^{p_{4}}$$
 
 ```{r d2bagw, echo=TRUE, eval=TRUE}
 
-# In this case dbh and agb calculated from Chojnacky serves as the "observed data" to fit the other parameters against. 
+# In this case dbh and agb calculated from Chojnacky serves as 
+# the "observed data" to fit the other parameters against. 
 
 # Define the variables needed for the Saldarriaga function
 rho = 0.367
@@ -200,11 +228,13 @@ c2b = 2
 test_2par <- par2_pwr(0.146, d.agb, 2.464, c2b)
 choj <- choj_eq(choj_p1, choj_p2, d.agb)
 
-# Parameters from earlier Jupyter Notebook. Not sure how to determine the best fit for the Sal function in r.
+# Parameters from earlier Jupyter Notebook. 
 #p1 = 0.131
 #p2 = 0.626
 #p3 = 2.46
 #p4 = 2.18
+
+# New parameters from bet fit below. 
 
 p1 = 0.11
 p2 = 0.65
@@ -492,3 +522,53 @@ ca_mod2_R2
 ca_mod3_R2
 ca_mod4_R2
 ```
+
+
+
+## Diameter to sapwood carbon
+
+FATES provides only one sapwood allometry model. The slope of the ratio of leaf area to stem area (la:sa) to diameter line is zero.
+
+
+```{r sap_data, echo=TRUE, eval=TRUE}
+# Well I think one really only needs to determine the ratio of leaf area per sap area
+
+# sapwood area
+
+#ssba <- pipo$a.ssba
+# ssbbh <= pipo$a.ssbh
+ssbc <- pipo$a.ssbc *100 # sapwood area at base of crown
+
+# leaf area
+
+lfa <- pipo$a.lf
+
+plot(lfa~ssbc)
+curve(0.25 + 0*x)
+
+hist(log10(lfa))
+hist(log10(ssbc))
+
+```
+
+```{r sap_mod, echo=TRUE, eval=TRUE}
+# we know that the slope is set to 0
+# so we just need to find the intercept
+
+sap_mod <- lm(log10(lfa) ~ log10(ssbc))
+coef(sap_mod)
+
+# Create a simple linear function to determine the intercept with a slope of 0
+
+sap_lin <- function(int, h, slope){
+  lapsa <- int + h * slope 
+  return(lapsa)
+}
+
+
+sap_lin(-0.8, pipo$h.t, 0)
+#sap_mod.fit <- ( ~ sap_lin(int, pipo$h.t, 0), start=list(int=-1), trace = TRUE)
+
+```
+
+
