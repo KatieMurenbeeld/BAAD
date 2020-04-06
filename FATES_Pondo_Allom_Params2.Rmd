@@ -250,7 +250,10 @@ points(sal2~d.agb, col="blue", type="l")
 points(sal3~d.agb, col="black", lty=2, type="l")
 points(test_2par~d.agb, col="orange", type="l")
 points(exp(choj)~d.agb, col="darkgreen", pch=16)
-
+legend("topleft", 
+  legend = c("Chojnacky (obs.)", "Sal1", "Sal2", "Sal3", "2 Parameter Power"), 
+  col = c("darkgreen", "red", "blue", "black", "orange"), 
+  pch = 16)
 ```
 
 
